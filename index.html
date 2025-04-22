@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Moses Collapse(t) - Phoneme Demo</title>
+  <style>
+    body { background-color: #0d1117; color: #ffffff; font-family: monospace; text-align: center; padding: 20px; }
+    canvas { border: 1px solid #555; margin-top: 20px; background-color: #111; }
+    input, button { padding: 10px; margin: 10px; font-size: 1em; }
+    .output { margin-top: 20px; font-size: 1.2em; color: gold; }
+    .score { margin-top: 10px; font-size: 1em; color: lightgreen; }
+  </style>
+  <script src="phonemes.js"></script>
+</head>
+<body>
+  <h1>Moses DSI: Phoneme-Aware Collapse(t) Demo</h1>
+  <p>Enter a symbolic phrase below:</p>
+  <input type="text" id="phraseInput" placeholder="Let there be light" size="40">
+  <button onclick="runMoses()">Run Moses</button>
+  <canvas id="waveCanvas" width="600" height="200"></canvas>
+  <div class="output" id="outputText"></div>
+  <div class="score" id="scoreText"></div>
+
+  <script>
+    const VOWELS = ['AA','AE','AH','AO','AW','AY','EH','ER','EY','IH','IY','OW','OY','UH','UW'];
+    
+    function phraseToPhonemeWaveform(phrase, length = 600) {
+      const waveform = new Float32Array(length);
+      const words = phrase.toLowerCase().replace(/[^a-z\s']/g, '').split(/\s+/);
+      let phonemes = [];
+
+      words.forEach(word => {
+        if (PHONEMES[word]) {
+          phonemes.push(...PHONEMES[word]);
+        }
+      });
+
+      if (phonemes.length === 0) return waveform;
+
+      for (let i = 0; i < length; i++) {
+        let t = i / length;
+        let wow = 0;
+        let flutter = 0;
+        phonemes.forEach((ph, idx) => {
+          let freq = 100 + idx * 5;
+          if (VOWELS.includes(ph.replace(/[0-9]/g, ''))) {
+            wow += Math.sin(2 * Math.PI * freq * t);
+          } else {
+            flutter += Math.sin(2 * Math.PI * freq * t);
+          }
+        });
+        waveform[i] = (wow / phonemes.length) + (flutter / phonemes.length);
+      }
+
+      return waveform;
+    }
+
+    function calculateCollapse(waveform, threshold = 1.5) {
+      if (waveform.length === 0) return { collapsed: false, score: 0 };
+      let wow = Math.abs(waveform.reduce((a, b) => a + b, 0) / waveform.length);
+      let flutter = 0;
+      for (let i = 1; i < waveform.length; i++) {
+        flutter += Math.abs(waveform[i] - waveform[i - 1]);
+      }
+      flutter /= waveform.length;
+      const score = (wow / (flutter + 1e-6)).toFixed(3);
+      return { collapsed: score > threshold, score };
+    }
+
+    function drawWaveform(waveform, canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      for (let i = 0; i < waveform.length; i++) {
+        let y = canvas.height / 2 - waveform[i] * 40;
+        ctx.lineTo(i, y);
+      }
+      ctx.strokeStyle = "lime";
+      ctx.stroke();
+    }
+
+    function runMoses() {
+      const phrase = document.getElementById("phraseInput").value.trim();
+      const waveform = phraseToPhonemeWaveform(phrase);
+      drawWaveform(waveform, document.getElementById("waveCanvas"));
+      const result = calculateCollapse(waveform);
+      const output = document.getElementById("outputText");
+      const score = document.getElementById("scoreText");
+      if (result.collapsed) {
+        output.innerText = "Collapse(t): Moses says \"Light\" has emerged.";
+      } else {
+        output.innerText = "Collapse(t): No symbolic resonance detected.";
+      }
+      score.innerText = `Resonance Score: ${result.score}`;
+    }
+  </script>
+</body>
+</html>
